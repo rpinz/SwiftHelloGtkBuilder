@@ -1,27 +1,33 @@
 import CGtk
+import GIO
 import GLib
 import GLibObject
-import GIO
 import Gtk
 
-var settings: Gtk.Settings!
-let cwd = getCurrentDir()!
-let appInvocation = CommandLine.arguments[0]
-let appFull = findProgramInPath(program: UnsafeMutablePointer(mutating: appInvocation))!
-let appDir = pathGetDirname(fileName: UnsafeMutablePointer(mutating: appFull))!
-let appName = pathGetBasename(fileName: UnsafeMutablePointer(mutating: appInvocation))!
+private var settings: Gtk.Settings!
+private let cwd: String = getCurrentDir()
+private let appInvocation: String = CommandLine.arguments[0]
+private let appFull: String = findProgramInPath(program: UnsafePointer<gchar>(appInvocation)) ?? ""
+private let appDir: String = pathGetDirname(fileName: UnsafePointer<gchar>(appFull)) ?? ""
+private let appName: String = pathGetBasename(fileName: UnsafePointer<gchar>(appInvocation)) ?? ""
 
 /// Convenience extensions for GtkBuilder to search for .ui files
 extension Builder {
     /// Search for the given resource
     ///
-    /// - parameter resource:   resource file to search for
+    /// - parameter resource: resource file to search for
     convenience init?(_ resource: String) {
         self.init()
         var lastError: Error?
-        for path in ["Resources", cwd, "\(appDir)/Resources", "\(appDir)/../Resources", "/usr/share/\(appName)", "/usr/local/share/\(appName)", "/Library/Application Support/\(appName)"] {
+        for path: String in [ "Resources",
+                              cwd,
+                              "\(appDir)/Resources",
+                              "\(appDir)/../Resources",
+                              "/usr/share/\(appName)",
+                              "/usr/local/share/\(appName)",
+                              "/Library/Application Support/\(appName)" ] {
             do {
-                let _ = try addFrom(file: "\(path)/\(resource)")
+                _ = try addFrom(file: "\(path)/\(resource)")
                 lastError = nil
                 break
             } catch {
@@ -35,12 +41,14 @@ extension Builder {
         }
     }
 }
+
 /// Bind all the widgets together
 ///
 /// - parameter builder: GtkBuilder to extract the widgets from
 ///
 func connectWidgets(from builder: Builder) {
     let get = builder.getObject
+/*
     let leftEntry    = EntryRef(cPointer: get("leftText"))
     let rightEntry   = EntryRef(cPointer: get("rightText"))
     let plusButton   = ToggleButtonRef(cPointer: get("plus"))
@@ -50,6 +58,29 @@ func connectWidgets(from builder: Builder) {
     var textView     = TextViewRef(cPointer: get("textView"))
     var resultLabel  = LabelRef(cPointer: get("resultLabel"))
     let equalsButton = ButtonRef(cPointer: get("equalsButton"))
+*/
+    guard let leftTextPointer = get("leftText"),
+          let rightTextPointer = get("rightText"),
+          let plusPointer = get("plus"),
+          let minusPointer = get("minus"),
+          let timesPointer = get("times"),
+          let dividePointer = get("divide"),
+          let textViewPointer = get("textView"),
+          let resultLabelPointer = get("resultLabel"),
+          let equalsButtonPointer = get("equalsButton")
+    else {
+        print("found nil pointer")
+        return
+    }
+    let leftEntry    = EntryRef(cPointer: leftTextPointer)
+    let rightEntry   = EntryRef(cPointer: rightTextPointer)
+    let plusButton   = ToggleButtonRef(cPointer: plusPointer)
+    let minusButton  = ToggleButtonRef(cPointer: minusPointer)
+    let timesButton  = ToggleButtonRef(cPointer: timesPointer)
+    let divButton    = ToggleButtonRef(cPointer: dividePointer)
+    var textView     = TextViewRef(cPointer: textViewPointer)
+    var resultLabel  = LabelRef(cPointer: resultLabelPointer)
+    let equalsButton = ButtonRef(cPointer: equalsButtonPointer)
     //
     // operations associated with the widgets
     //
@@ -58,13 +89,13 @@ func connectWidgets(from builder: Builder) {
     let sub: (Double, Double) -> Double = (-)
     let div: (Double, Double) -> Double = (/)
     let mul: (Double, Double) -> Double = (*)
-    let operators = [ "+" : add,  "-" : sub,  "*" : mul,  "/" : div ]
+    let operators = [ "+": add, "-": sub, "*": mul, "/": div ]
     var opLabel = "+"
     var op = operators[opLabel]!
     let calc: () -> (l: String, r: String, result: String)? = {
         let leftText  = leftEntry.text
         let rightText = rightEntry.text
-        guard let  leftValue =  leftText.flatMap(Double.init),
+        guard let leftValue = leftText.flatMap(Double.init),
               let rightValue = rightText.flatMap(Double.init) else {
                 return nil
         }
@@ -97,16 +128,17 @@ func connectWidgets(from builder: Builder) {
             recursive = false
         }
     }
+
     //
     // connect the widgets
     //
-    leftEntry.connect( EditableSignalName.changed, handler: calculate)
+    leftEntry.connect(EditableSignalName.changed, handler: calculate)
     rightEntry.connect(EditableSignalName.changed, handler: calculate)
 
-    equalsButton.connect(signal:.clicked, to: record)
+    equalsButton.connect(signal: .clicked, to: record)
 
     for button in buttons {
-        button.connect(signal:.toggled, to: setOperator(button))
+        button.connect(signal: .toggled, to: setOperator(button))
     }
 }
 
